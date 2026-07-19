@@ -1,18 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recept Scraping</title>
-    <link rel="stylesheet" href="">
+    <title>Recipe-Hub 🍽️</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header class="app-header">
+    <div class="brand">
+        <h1>🍽️ RecipeHub</h1>
+        <p>Dina recept och inköpslistor samlade</p>
+    </div>
     <form id="ReceptForm">
-        <input type="url" required id="url">
-        <button type="submit">Hämta Recept</button>
+        <input type="url" id="url" placeholder="Klistra in receptlänk..." required>
+        <button type="submit"> Lägg till recept </button>
     </form>
-    
-    <div id="recipe-container"></div>
-    <script src="index.js"></script>
+    <button id="addManualRecipe"> + </button>
+</header>
+<nav class="view-switch">
+    <button class="tab active" data-view="recipes"> 📖 Recept </button>
+    <button class="tab" data-view="shopping"> 🛒 Inköpslista</button>
+</nav>
+<main class="app-container">
+<section id="recipe-view" class="view-panel active-panel">
+    <div class="panel-header">
+        <div>
+            <h2> Mina recept </h2>
+            <span> Samlade veckans favoriter </span>
+        </div>
+        <button id="generateList" class="primary-button"> 🛒 Skapa inköpslista </button>
+    </div>
+
+    <div id="recipe-container"> </div>
+</section>
+<section id="shopping-view" class="view-panel">
+    <div class="shopping-header">
+        <h2> 🛒 Inköpslista </h2>
+        <p> Automatisk lista från dina recept</p>
+    </div>
+    <button id="clearList">🧹 Rensa inköpslista</button>
+    <div id="shopping-list"></div>
+</section>
+</main>
+<script src="index.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>
