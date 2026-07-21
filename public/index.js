@@ -33,14 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSavedShoppingList();
 
     //visar upp den "vanliga" menyn där inget går att redigera
-    function renderViewMode(recipe, contentArea) {
-        contentArea.innerHTML = '';
+    function renderViewMode(recipe, recipeDiv) {
+        recipeDiv.innerHTML = '';
 
+        //const sourceLink = document.createElement('a');
         const img = document.createElement('img');
         img.src = recipe.image;
         img.alt = recipe.name;
         img.style.width = '200px';
-        contentArea.appendChild(img);
+        recipeDiv.appendChild(img);
 
         const table = document.createElement('table');
         recipe.ingredients.forEach(ingredient => {
@@ -60,18 +61,22 @@ document.addEventListener('DOMContentLoaded', () => {
             row.appendChild(unit);
             table.appendChild(row);
         });
-        contentArea.appendChild(table);
+        recipeDiv.appendChild(table);
+    }
+
+    function checkboxRecipe(){
+        //TODO... Välja vilka recept som ska vara med i inköpslistan
     }
 
     // Visar upp redigeringsläget av recepten
-    function renderEditMode(recipe, contentArea, titleEl, switchToView) {
-        contentArea.innerHTML = '';
+    function renderEditMode(recipe, recipeDiv, recipeTitle, switchToView) {
+        recipeDiv.innerHTML = '';
 
         const img = document.createElement('img');
         img.src = recipe.image;
         img.alt = recipe.name;
         img.style.width = '200px';
-        contentArea.appendChild(img);
+        recipeDiv.appendChild(img);
 
         const table = document.createElement('table');
 
@@ -128,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recipe.ingredients.forEach(ingredient => {
             table.appendChild(createIngredientRow(ingredient));
         });
-        contentArea.appendChild(table);
+        recipeDiv.appendChild(table);
 
         const addIngredientBtn = document.createElement('button');
         addIngredientBtn.textContent = '+ Lägg till ingrediens';
@@ -138,9 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
             recipe.ingredients.push(newIngredient);
             table.appendChild(createIngredientRow(newIngredient));
         });
-        contentArea.appendChild(addIngredientBtn);
+        recipeDiv.appendChild(addIngredientBtn);
 
-        // Titeln blir redigerbar i edit-läge
+        // Titeln blir redigerbar i redigeringsläge
         const titleInput = document.createElement('input');
         titleInput.type = 'text';
         titleInput.value = recipe.name;
@@ -148,42 +153,58 @@ document.addEventListener('DOMContentLoaded', () => {
         titleInput.addEventListener('input', () => {
             recipe.name = titleInput.value;
         });
-        titleEl.innerHTML = '';
-        titleEl.appendChild(titleInput);
+        recipeTitle.innerHTML = '';
+        recipeTitle.appendChild(titleInput);
 
-        // Spara-knapp -> växlar tillbaka till vanligt läge
+        // Spara knapp
         const saveBtn = document.createElement('button');
         saveBtn.textContent = 'Spara';
         saveBtn.type = 'button';
         saveBtn.classList.add('save-btn');
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
+            await fetch(`/api/recipes/${recipe.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: recipe.name,
+                    image: recipe.image,
+                    ingredients: recipe.ingredients
+                })
+            });
             switchToView();
         });
-        contentArea.appendChild(saveBtn);
+        recipeDiv.appendChild(saveBtn);
     }
 
-    // Bygger ett helt receptkort, med pennan som växlar mellan lägena
+    // Bygger receptkort, med pennan som växlar mellan lägena
     function renderRecipeCard(recipe) {
         const box = document.createElement('div');
         box.classList.add('recipe');
     
-        // Rad 1: titel + redigera-penna
         const titleRow = document.createElement('div');
         titleRow.classList.add('recipe-title-row');
     
-        const titleEl = document.createElement('h2');
-        titleEl.textContent = recipe.name;
+        const recipeTitle = document.createElement('h2');
+        recipeTitle.textContent = recipe.name;
+
+        if(recipe.url){
+            const clickableLink = document.createElement('a');
+            clickableLink.href = recipe.url;
+            clickableLink.target = '_blank';
+            clickableLink.appendChild(recipeTitle);
+            titleRow.appendChild(clickableLink);
+        }else{
+            titleRow.appendChild(recipeTitle);
+        }
     
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '✏️';
-        editBtn.type = 'button';
-        editBtn.classList.add('edit-btn');
+        const editButton = document.createElement('button');
+        editButton.textContent = '✏️';
+        editButton.type = 'button';
+        editButton.classList.add('edit-btn');
     
-        titleRow.appendChild(titleEl);
-        titleRow.appendChild(editBtn);
+        titleRow.appendChild(editButton);
         box.appendChild(titleRow);
     
-        // Rad 2: åtgärdsknappar (ta bort, kokbok)
         const actionsRow = document.createElement('div');
         actionsRow.classList.add('recipe-actions');
     
@@ -222,22 +243,21 @@ document.addEventListener('DOMContentLoaded', () => {
         actionsRow.appendChild(cookbookBtn);
         box.appendChild(actionsRow);
     
-        // Resten: bild, ingredienser osv.
-        const contentArea = document.createElement('div');
-        box.appendChild(contentArea);
+        const recipeDiv = document.createElement('div');
+        box.appendChild(recipeDiv);
     
         function switchToView() {
-            titleEl.textContent = recipe.name;
-            editBtn.style.display = 'inline-block';
-            renderViewMode(recipe, contentArea);
+            recipeTitle.textContent = recipe.name;
+            editButton.style.display = 'inline-block';
+            renderViewMode(recipe, recipeDiv);
         }
     
-        editBtn.addEventListener('click', () => {
-            editBtn.style.display = 'none';
-            renderEditMode(recipe, contentArea, titleEl, switchToView);
+        editButton.addEventListener('click', () => {
+            editButton.style.display = 'none';
+            renderEditMode(recipe, recipeDiv, recipeTitle, switchToView);
         });
     
-        renderViewMode(recipe, contentArea);
+        renderViewMode(recipe, recipeDiv);
     
         return box;
     }

@@ -13,12 +13,13 @@ async function scrapeIcaRecipe(url) {
         return null;
 
     const data = JSON.parse(script);
-    return normalizeIcaRecipe(data);
+    return normalizeIcaRecipe(data, url);
 }
 
-function normalizeIcaRecipe(rawData) {
+function normalizeIcaRecipe(rawData, url) {
     return {
         source: 'ica',
+        url : url,
         name: rawData.name,
         image: rawData.image,
         ingredients: rawData.recipeIngredient.map(parseIngredientString),

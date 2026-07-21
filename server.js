@@ -71,7 +71,7 @@ function getShoppingListFromDb() {
     return db.prepare('SELECT * FROM shopping_list ORDER BY id').all();
 }
 
-// Hämta sparad lista (vid sidladdning)
+// Hämta sparad lista
 app.get('/api/shopping-list', (req, res) => {
     try {
         res.json(getShoppingListFromDb());
@@ -92,7 +92,7 @@ app.patch('/api/shopping-list/:id/check', (req, res) => {
     }
 });
 
-// Rensa hela listan (inför nästa vecka)
+// Rensa hela listan
 app.delete('/api/shopping-list', (req, res) => {
     try {
         db.prepare('DELETE FROM shopping_list').run();
@@ -102,7 +102,7 @@ app.delete('/api/shopping-list', (req, res) => {
     }
 });
 
-// Spara ett nytt recept (körs automatiskt varje gång du scrapar/lägger till ett)
+// Spara ett nytt recept
 app.post('/api/recipes', (req, res) => {
     try {
         const { name, image, ingredients } = req.body;
@@ -123,7 +123,7 @@ app.post('/api/recipes', (req, res) => {
     }
 });
 
-// Hämta alla sparade recept (körs vid sidladdning)
+// Hämta alla sparade recept
 app.get('/api/recipes', (req, res) => {
     try {
         const recipes = db.prepare('SELECT * FROM recipes').all();
@@ -138,10 +138,31 @@ app.get('/api/recipes', (req, res) => {
     }
 });
 
-// Markera ett recept som kokboksvärdigt
+// Markera ett recept som läggs till i kokboken
 app.patch('/api/recipes/:id/cookbook', (req, res) => {
     try {
         db.prepare('UPDATE recipes SET in_cookbook = 1 WHERE id = ?').run(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/recipes/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, image, ingredients } = req.body;
+
+        db.prepare('UPDATE recipes SET name = ?, image = ? WHERE id = ?').run(name, image || '', id);
+
+        db.prepare('DELETE FROM ingredients WHERE recipe_id = ?').run(id);
+        const insertIngredient = db.prepare(
+            'INSERT INTO ingredients (recipe_id, name, amount, unit) VALUES (?, ?, ?, ?)'
+        );
+        for (const ing of ingredients) {
+            insertIngredient.run(id, ing.name, ing.amount, ing.unit);
+        }
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+//const { raw } = require('express');
 
 async function scrapeCoopRecipe(url) {// Hämta recept från coops  hemsida
     const recipeResponse = await axios.get(url, {
@@ -20,10 +21,10 @@ async function scrapeCoopRecipe(url) {// Hämta recept från coops  hemsida
         { headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
 
-    return normalizeCoopRecipe(apiResponse.data); // skicka receptet
+    return normalizeCoopRecipe(apiResponse.data, url); // skicka receptet
 }
 
-function normalizeCoopRecipe(rawData) {
+function normalizeCoopRecipe(rawData, url) {
     const ingredients = rawData.recipePart.flatMap(part =>
         part.ingredients.map(ing => ({
             name: ing.name,
@@ -34,8 +35,10 @@ function normalizeCoopRecipe(rawData) {
 
     return {
         source: 'coop',
-        ingredients,
-        // fyll på med name, instructions osv. när du kollat klart API-svaret
+        url : url,
+        name: rawData.name,
+        image: rawData.imageUrl,
+        ingredients
     };
 }
 

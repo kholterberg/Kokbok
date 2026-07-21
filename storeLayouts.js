@@ -6,6 +6,7 @@ const storeLayouts = {
         'grönt',
         'mejeri',
         'tacos',
+        'kryddor',
         'pasta',
         'konserver',
         'städ',
