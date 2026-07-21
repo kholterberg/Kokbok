@@ -1,4 +1,4 @@
-# 🍽️ RecipeHub
+# RecipeHub
 
 Ett personligt webbverktyg för att samla recept från olika hemsidor, redigera dem, spara dem i en egen kokbok, och automatiskt generera en inköpslista som är sorterad efter min lokala matbutiks planlösning.
 
@@ -14,8 +14,6 @@ Byggt som ett hobbyprojekt för att lösa ett konkret vardagsproblem: sluta skri
 - **Automatisk inköpslista** som slår ihop dubbletter, kategoriserar ingredienser (mejeri, kött, grönt, osv.) och sorterar dem enligt en hårdkodad gångordning genom butiken
 - **Avbockningsbara varor** i inköpslistan, med status sparad i databasen
 - **Responsivt gränssnitt** med flikar för recept respektive inköpslista
-
-## Teknikstack
 
 | Del | Verktyg |
 |---|---|
