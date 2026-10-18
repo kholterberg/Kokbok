@@ -306,8 +306,8 @@ app.post('/api/recipes', async (req, res) => {
         }
 
         const insertRecipe = db.prepare(`
-            INSERT INTO recipes (name, image, source, url, url_key, in_cookbook, in_week, description, instructions, servings, total_time, created_at)
-            VALUES (?, '', ?, ?, ?, 0, 1, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO recipes (name, image, source, url, url_key, in_cookbook, in_week, description, instructions, servings, total_time, created_at, last_in_week)
+            VALUES (?, '', ?, ?, ?, 0, 1, ?, ?, ?, ?, datetime('now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
         `);
         const result = insertRecipe.run(
             name || 'Nytt recept',
@@ -399,7 +399,8 @@ app.patch('/api/recipes/:id', (req, res) => {
             return res.json({ deleted: true });
         }
 
-        db.prepare('UPDATE recipes SET in_cookbook = ?, in_week = ? WHERE id = ?').run(inCookbook, inWeek, current.id);
+        db.prepare('UPDATE recipes SET in_cookbook = ? WHERE id = ?').run(inCookbook, current.id);
+        if (inWeek !== current.in_week) markInWeek.run(inWeek, current.id);
         res.json(getRecipe(current.id));
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -413,6 +414,74 @@ app.delete('/api/recipes/:id', (req, res) => {
         deleteRecipe(current.id);
         deleteLocalImage(current.image);
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------- Veckomeny ----------
+
+// Sätter in_week och noterar när det hände, så att generatorn vet hur länge sedan
+// receptet var med i veckomenyn
+const markInWeek = db.prepare("UPDATE recipes SET in_week = ?, last_in_week = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?");
+
+// Kokboksrecept som inte är med i veckan, i turordning: aldrig planerade först, sedan de som
+// var längst sedan i veckomenyn. Recept med exakt samma tidpunkt (t.ex. valda i samma
+// generering) slumpas, så att ordningen varierar.
+const pickCandidates = db.prepare(`
+    SELECT id FROM recipes
+    WHERE in_cookbook = 1 AND in_week = 0
+    ORDER BY last_in_week IS NOT NULL, last_in_week, random()
+    LIMIT ?
+`);
+
+const generateWeek = db.transaction(count => {
+    // Förra veckans kokboksrecept lämnar veckan – de finns kvar i kokboken
+    const previous = db.prepare('SELECT id FROM recipes WHERE in_week = 1 AND in_cookbook = 1').all();
+    for (const { id } of previous) markInWeek.run(0, id);
+
+    // Recept som inte finns i kokboken ligger kvar (de skulle annars raderas) och räknas in i antalet
+    const kept = db.prepare('SELECT COUNT(*) AS count FROM recipes WHERE in_week = 1').get().count;
+    const needed = Math.max(0, count - kept);
+
+    const picked = pickCandidates.all(needed);
+    for (const { id } of picked) markInWeek.run(1, id);
+    return { added: picked.length, kept, needed };
+});
+
+function allRecipes() {
+    return db.prepare('SELECT * FROM recipes ORDER BY id').all().map(toRecipe);
+}
+
+// Ny veckomeny från kokboken – körs bara när man trycker på knappen
+app.post('/api/week/generate', (req, res) => {
+    try {
+        const count = Math.min(14, Math.max(1, parseInt(req.body.count, 10) || 6));
+        const result = generateWeek(count);
+        res.json({ ...result, count, recipes: allRecipes() });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Byt ut ett recept i veckan mot nästa i turordningen
+const swapRecipe = db.transaction(id => {
+    const [next] = pickCandidates.all(1); // väljs innan det gamla tas bort, så att det inte väljs igen
+    if (!next) return null;
+    markInWeek.run(0, id);
+    markInWeek.run(1, next.id);
+    return next.id;
+});
+
+app.post('/api/week/swap/:id', (req, res) => {
+    try {
+        const current = db.prepare('SELECT in_week, in_cookbook FROM recipes WHERE id = ?').get(req.params.id);
+        if (!current || !current.in_week) return res.status(404).json({ error: 'Receptet finns inte i veckomenyn' });
+        if (!current.in_cookbook) return res.status(400).json({ error: 'Bara recept från kokboken kan bytas ut' });
+
+        const newId = swapRecipe(Number(req.params.id));
+        if (!newId) return res.status(409).json({ error: 'Det finns inga fler recept i kokboken att byta till' });
+        res.json({ newId, recipes: allRecipes() });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

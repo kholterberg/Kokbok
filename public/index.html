@@ -3,55 +3,70 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recipe-Hub 🍽️</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#efeeeb" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)">
+    <title>RecipeHub</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
     <header class="app-header">
         <div class="brand">
-            <h1>🍽️ RecipeHub</h1>
-            <p>Dina recept och inköpslistor samlade</p>
+            <span class="brand-mark" aria-hidden="true">🍽️</span>
+            <div>
+                <h1>RecipeHub</h1>
+                <p>Din kokbok och veckomeny</p>
+            </div>
         </div>
-        <form id="ReceptForm">
-            <input type="url" id="url" placeholder="Klistra in receptlänk..." required>
-            <button type="submit"> Lägg till recept </button>
+        <form id="ReceptForm" class="add-form">
+            <input type="url" id="url" placeholder="Klistra in receptlänk…" aria-label="Receptlänk" required>
+            <button type="submit" class="primary-button">Lägg till</button>
         </form>
-        <button id="addManualRecipe" title="Lägg till eget recept"> + </button>
+        <button id="addManualRecipe" class="secondary-button" type="button" title="Skriv in ett eget recept">✍️ Eget recept</button>
     </header>
-    <nav class="view-switch">
-        <button class="tab active" data-view="recipe"> 🗓️ Veckans recept </button>
-        <button class="tab" data-view="cookbook"> 📖 Kokbok </button>
-        <button class="tab" data-view="shopping"> 🛒 Inköpslista</button>
+
+    <nav class="view-switch" aria-label="Vyer">
+        <button class="tab active" data-view="recipe">🗓️ <span>Veckan</span></button>
+        <button class="tab" data-view="cookbook">📖 <span>Kokbok</span></button>
+        <button class="tab" data-view="shopping">🛒 <span>Inköpslista</span></button>
     </nav>
+
     <main class="app-container">
         <section id="recipe-view" class="view-panel active-panel">
             <div class="panel-header">
                 <div>
-                    <h2> Veckans recept </h2>
-                    <span> Det du ska laga den här veckan </span>
+                    <h2>Veckans recept</h2>
+                    <span>Det du ska laga den här veckan</span>
                 </div>
-                <button id="generateList" class="primary-button"> 🛒 Skapa inköpslista </button>
+                <div class="week-controls">
+                    <label class="week-count" title="Antal recept i veckomenyn">
+                        Antal <input type="number" id="week-count" min="1" max="14" value="6">
+                    </label>
+                    <button id="generateWeek" class="secondary-button" type="button">🎲 Generera veckomeny</button>
+                    <button id="generateList" class="primary-button" type="button">🛒 Skapa inköpslista</button>
+                </div>
             </div>
 
-            <div id="recipe-container" class="recipe-grid"> </div>
+            <div id="recipe-container" class="recipe-grid"></div>
         </section>
+
         <section id="cookbook-view" class="view-panel">
             <div class="panel-header">
                 <div>
-                    <h2> Kokbok </h2>
-                    <span id="cookbook-count"> Dina sparade favoriter </span>
+                    <h2>Kokbok</h2>
+                    <span id="cookbook-count">Dina sparade favoriter</span>
                 </div>
-                <input type="search" id="cookbook-search" placeholder="Sök på namn eller ingrediens...">
+                <input type="search" id="cookbook-search" placeholder="Sök på namn eller ingrediens…" aria-label="Sök i kokboken">
             </div>
 
-            <div id="cookbook-container" class="recipe-grid"> </div>
+            <div id="cookbook-container" class="recipe-grid"></div>
         </section>
+
         <section id="shopping-view" class="view-panel">
             <div class="shopping-header">
-                <h2> 🛒 Inköpslista </h2>
-                <p> Automatisk lista från dina recept</p>
+                <h2>Inköpslista</h2>
+                <p id="shopping-progress">Automatisk lista från veckans recept</p>
             </div>
             <div class="store-bar">
                 <label for="store-select">🏪 Butik</label>
@@ -60,10 +75,21 @@
                 <button id="addStore" class="action-btn" type="button">+ Ny butik</button>
             </div>
             <div id="store-editor" class="store-editor" hidden></div>
-            <button id="clearList">🧹 Rensa inköpslista</button>
             <div id="shopping-list"></div>
+            <button id="clearList" type="button">🧹 Rensa inköpslista</button>
         </section>
     </main>
+
+    <!-- Hela receptet (ingredienser, instruktioner, redigering) öppnas här när man klickar på ett kort -->
+    <dialog id="recipe-dialog" class="recipe-dialog" aria-labelledby="dialog-title">
+        <header class="dialog-header">
+            <h2 id="dialog-title"></h2>
+            <button id="dialog-edit" class="icon-btn" type="button" title="Redigera" aria-label="Redigera">✏️</button>
+            <button id="dialog-close" class="icon-btn" type="button" title="Stäng" aria-label="Stäng">✕</button>
+        </header>
+        <div id="dialog-body" class="dialog-body" tabindex="-1"></div>
+    </dialog>
+
     <script src="index.js"></script>
     <script src="ui.js"></script>
 </body>

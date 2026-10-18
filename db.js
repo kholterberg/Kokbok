@@ -42,7 +42,8 @@ const newRecipeColumns = {
     total_time: 'INTEGER',  // minuter
     created_at: 'TEXT',
     in_week: 'INTEGER DEFAULT 1', // med i veckans recept (oberoende av kokboken)
-    url_key: 'TEXT'               // normaliserad URL, för dubblettkontroll
+    url_key: 'TEXT',              // normaliserad URL, för dubblettkontroll
+    last_in_week: 'TEXT'          // senast receptet lades till i / togs bort från veckomenyn
 };
 
 const existingColumns = db.prepare('PRAGMA table_info(recipes)').all().map(col => col.name);

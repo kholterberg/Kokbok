@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.querySelector('#ReceptForm');
     const input = document.querySelector('#url');
     const submitBtn = form.querySelector('button[type="submit"]');
+    const submitLabel = submitBtn.textContent;
     const recipeContainer = document.querySelector('#recipe-container');
     const cookbookContainer = document.querySelector('#cookbook-container');
     const cookbookSearch = document.querySelector('#cookbook-search');
@@ -48,6 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSavedRecipes() {
         recipes = await api('/api/recipes');
         renderAll();
+
+        // ?recept=12 i adressen öppnar receptet direkt (går att bokmärka eller skicka som länk)
+        const linkedId = Number(new URLSearchParams(location.search).get('recept'));
+        if (linkedId && recipes.some(recipe => recipe.id === linkedId)) openRecipe(linkedId);
     }
 
     loadSavedRecipes();
@@ -117,6 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return p;
     }
 
+    // Mängder visas med svenskt decimaltecken: 0.5 -> "0,5"
+    function formatAmount(amount) {
+        if (amount === null || amount === undefined || amount === '') return '';
+        return Number(amount).toLocaleString('sv-SE', { maximumFractionDigits: 2 });
+    }
+
     //visar upp den "vanliga" menyn där inget går att redigera
     function renderViewMode(recipe, recipeDiv) {
         recipeDiv.innerHTML = '';
@@ -124,58 +135,92 @@ document.addEventListener('DOMContentLoaded', () => {
         if (recipe.image) {
             const img = document.createElement('img');
             img.src = recipe.image;
-            img.alt = recipe.name;
-            img.loading = 'lazy';
+            img.alt = '';
+            img.classList.add('detail-image');
             recipeDiv.appendChild(img);
         }
 
         renderMeta(recipe, recipeDiv);
 
-        const table = document.createElement('table');
-        recipe.ingredients.forEach(ingredient => {
-            const row = document.createElement('tr');
+        if (recipe.description) {
+            const description = document.createElement('p');
+            description.classList.add('recipe-description');
+            description.textContent = recipe.description;
+            recipeDiv.appendChild(description);
+        }
 
-            const name = document.createElement('td');
-            name.textContent = ingredient.name;
+        // Ingredienser till vänster, instruktioner till höger (under varandra på mobil)
+        const columns = document.createElement('div');
+        columns.classList.add('detail-columns');
 
-            const amount = document.createElement('td');
-            amount.textContent = ingredient.amount ?? '';
+        const ingredientSection = document.createElement('section');
+        const ingredientHeading = document.createElement('h3');
+        ingredientHeading.textContent = 'Ingredienser';
+        ingredientSection.appendChild(ingredientHeading);
 
-            const unit = document.createElement('td');
-            unit.textContent = ingredient.unit ?? '';
+        if (recipe.ingredients.length === 0) {
+            const none = document.createElement('p');
+            none.classList.add('muted');
+            none.textContent = 'Inga ingredienser än. Tryck ✏️ för att lägga till.';
+            ingredientSection.appendChild(none);
+        } else {
+            const table = document.createElement('table');
+            table.classList.add('ingredient-table');
+            recipe.ingredients.forEach(ingredient => {
+                const row = document.createElement('tr');
 
-            row.appendChild(name);
-            row.appendChild(amount);
-            row.appendChild(unit);
-            table.appendChild(row);
-        });
-        recipeDiv.appendChild(table);
+                const amount = document.createElement('td');
+                amount.classList.add('amount');
+                amount.textContent = [formatAmount(ingredient.amount), ingredient.unit ?? ''].join(' ').trim();
 
-        renderInstructions(recipe, recipeDiv);
+                const name = document.createElement('td');
+                name.textContent = ingredient.name;
+
+                row.appendChild(amount);
+                row.appendChild(name);
+                table.appendChild(row);
+            });
+            ingredientSection.appendChild(table);
+        }
+
+        const instructionSection = document.createElement('section');
+        renderInstructions(recipe, instructionSection);
+
+        columns.appendChild(ingredientSection);
+        columns.appendChild(instructionSection);
+        recipeDiv.appendChild(columns);
     }
 
     function checkboxRecipe(){
         //TODO... Välja vilka recept som ska vara med i inköpslistan
     }
 
-    // Portioner, tillagningstid och länk till originalet
+    // Tid, portioner och källa – varje uppgift som ett eget element i stället för "A · B · C"
+    function recipeFacts(recipe) {
+        const facts = [];
+        if (recipe.total_time) facts.push(`⏱️ ${formatMinutes(recipe.total_time)}`);
+        if (recipe.servings) facts.push(`🍽️ ${recipe.servings}`);
+        return facts;
+    }
+
     function renderMeta(recipe, recipeDiv) {
-        const parts = [];
-        if (recipe.servings) parts.push(`🍽️ ${recipe.servings}`);
-        if (recipe.total_time) parts.push(`⏱️ ${formatMinutes(recipe.total_time)}`);
-        if (parts.length === 0 && !recipe.url) return;
+        const facts = recipeFacts(recipe);
+        if (facts.length === 0 && !recipe.url) return;
 
         const meta = document.createElement('p');
         meta.classList.add('recipe-meta');
-        meta.textContent = parts.join(' · ');
+        facts.forEach(fact => {
+            const span = document.createElement('span');
+            span.textContent = fact;
+            meta.appendChild(span);
+        });
 
         if (recipe.url) {
             const link = document.createElement('a');
             link.href = recipe.url;
             link.target = '_blank';
             link.rel = 'noopener';
-            link.textContent = recipe.source || 'Originalrecept';
-            if (parts.length) meta.append(' · ');
+            link.textContent = `Originalrecept på ${recipe.source || 'webben'}`;
             meta.appendChild(link);
         }
         recipeDiv.appendChild(meta);
@@ -190,11 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Steg som börjar med "## " är rubriker för delmoment (t.ex. "Sås", "Deg")
     function renderInstructions(recipe, recipeDiv) {
-        if (!recipe.instructions || recipe.instructions.length === 0) return;
-
         const heading = document.createElement('h3');
         heading.textContent = 'Gör så här';
         recipeDiv.appendChild(heading);
+
+        if (!recipe.instructions || recipe.instructions.length === 0) {
+            const none = document.createElement('p');
+            none.classList.add('muted');
+            none.textContent = recipe.url
+                ? 'Sajten skickade inga instruktioner – se originalreceptet.'
+                : 'Inga instruktioner än. Tryck ✏️ för att skriva dem.';
+            recipeDiv.appendChild(none);
+            return;
+        }
 
         let list = null;
         recipe.instructions.forEach(step => {
@@ -223,7 +276,8 @@ document.addEventListener('DOMContentLoaded', () => {
         recipeDiv.innerHTML = '';
 
         const img = document.createElement('img');
-        img.alt = draft.name;
+        img.alt = '';
+        img.classList.add('detail-image');
         img.hidden = !draft.image;
         if (draft.image) img.src = draft.image;
         recipeDiv.appendChild(img);
@@ -231,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Egen bild – skickas som data-URL och sparas som fil på servern
         const imageLabel = document.createElement('label');
         imageLabel.classList.add('image-upload');
-        imageLabel.textContent = draft.image ? '🖼️ Byt bild ' : '🖼️ Lägg till bild ';
+        imageLabel.textContent = draft.image ? '🖼️ Byt bild' : '🖼️ Lägg till bild';
         const imageInput = document.createElement('input');
         imageInput.type = 'file';
         imageInput.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -253,7 +307,12 @@ document.addEventListener('DOMContentLoaded', () => {
         imageLabel.appendChild(imageInput);
         recipeDiv.appendChild(imageLabel);
 
+        const ingredientHeading = document.createElement('h3');
+        ingredientHeading.textContent = 'Ingredienser';
+        recipeDiv.appendChild(ingredientHeading);
+
         const table = document.createElement('table');
+        table.classList.add('edit-table');
 
         function createIngredientRow(ingredient) {
             const row = document.createElement('tr');
@@ -263,6 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
             nameInput.type = 'text';
             nameInput.value = ingredient.name;
             nameInput.placeholder = 'Ingrediens';
+            nameInput.setAttribute('aria-label', 'Ingrediens');
             nameInput.addEventListener('input', () => {
                 ingredient.name = nameInput.value;
             });
@@ -272,6 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const amountInput = document.createElement('input');
             amountInput.type = 'number';
             amountInput.step = 'any';
+            amountInput.inputMode = 'decimal';
+            amountInput.placeholder = 'Mängd';
+            amountInput.setAttribute('aria-label', 'Mängd');
             amountInput.value = ingredient.amount ?? '';
             amountInput.addEventListener('input', () => {
                 ingredient.amount = amountInput.value === '' ? null : parseFloat(amountInput.value);
@@ -281,6 +344,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const unitCell = document.createElement('td');
             const unitInput = document.createElement('input');
             unitInput.type = 'text';
+            unitInput.placeholder = 'Enhet';
+            unitInput.setAttribute('aria-label', 'Enhet');
             unitInput.value = ingredient.unit ?? '';
             unitInput.addEventListener('input', () => {
                 ingredient.unit = unitInput.value === '' ? null : unitInput.value;
@@ -291,6 +356,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '✕';
             removeBtn.type = 'button';
+            removeBtn.title = 'Ta bort ingrediensen';
+            removeBtn.setAttribute('aria-label', 'Ta bort ingrediensen');
             removeBtn.addEventListener('click', () => {
                 const index = draft.ingredients.indexOf(ingredient);
                 if (index !== -1) draft.ingredients.splice(index, 1);
@@ -314,21 +381,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const addIngredientBtn = document.createElement('button');
         addIngredientBtn.textContent = '+ Lägg till ingrediens';
         addIngredientBtn.type = 'button';
+        addIngredientBtn.classList.add('add-ingredient-btn');
         addIngredientBtn.addEventListener('click', () => {
             const newIngredient = { name: '', amount: null, unit: null };
             draft.ingredients.push(newIngredient);
-            table.appendChild(createIngredientRow(newIngredient));
+            const row = createIngredientRow(newIngredient);
+            table.appendChild(row);
+            row.querySelector('input').focus();
         });
         recipeDiv.appendChild(addIngredientBtn);
 
         // Instruktioner redigeras som ett steg per rad
         const instructionsLabel = document.createElement('h3');
-        instructionsLabel.textContent = 'Gör så här (ett steg per rad)';
+        instructionsLabel.textContent = 'Gör så här';
         recipeDiv.appendChild(instructionsLabel);
 
         const instructionsInput = document.createElement('textarea');
         instructionsInput.classList.add('instructions-input');
         instructionsInput.rows = 8;
+        instructionsInput.placeholder = 'Ett steg per rad';
+        instructionsInput.setAttribute('aria-label', 'Instruktioner, ett steg per rad');
         instructionsInput.value = (draft.instructions || []).join('\n');
         instructionsInput.addEventListener('input', () => {
             draft.instructions = instructionsInput.value
@@ -338,11 +410,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         recipeDiv.appendChild(instructionsInput);
 
-        // Titeln blir redigerbar i edit-läge
+        // Titeln blir redigerbar i redigeringsläge
         const titleInput = document.createElement('input');
         titleInput.type = 'text';
         titleInput.value = draft.name;
         titleInput.classList.add('recipe-title-input');
+        titleInput.setAttribute('aria-label', 'Receptets namn');
         titleInput.addEventListener('input', () => {
             draft.name = titleInput.value;
         });
@@ -354,20 +427,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Spara-knapp -> sparar i databasen och växlar tillbaka till vanligt läge
         const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'Spara';
+        saveBtn.textContent = 'Spara ändringar';
         saveBtn.type = 'button';
         saveBtn.classList.add('save-btn');
         saveBtn.addEventListener('click', async () => {
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Sparar...';
+            saveBtn.textContent = 'Sparar…';
             try {
                 const updated = await api(`/api/recipes/${recipe.id}`, 'PUT', draft);
                 upsertRecipe(updated);
                 renderAll(); // receptet kan synas både i veckan och kokboken
+                switchToView();
             } catch (err) {
                 alert(`Kunde inte spara: ${err.message}`);
                 saveBtn.disabled = false;
-                saveBtn.textContent = 'Spara';
+                saveBtn.textContent = 'Spara ändringar';
             }
         });
 
@@ -380,14 +454,19 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonRow.appendChild(saveBtn);
         buttonRow.appendChild(cancelBtn);
         recipeDiv.appendChild(buttonRow);
+        titleInput.focus();
     }
 
-    function actionButton(text, extraClass, onClick) {
+    function actionButton(text, extraClass, onClick, title) {
         const btn = document.createElement('button');
         btn.textContent = text;
         btn.type = 'button';
         btn.classList.add('action-btn');
         if (extraClass) btn.classList.add(extraClass);
+        if (title) {
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+        }
         if (onClick) {
             btn.addEventListener('click', async () => {
                 btn.disabled = true;
@@ -417,34 +496,43 @@ document.addEventListener('DOMContentLoaded', () => {
         actionsRow.classList.add('recipe-actions');
 
         if (context === 'week') {
-            const removeBtn = actionButton('🗑️ Ta bort från veckan', 'delete-btn', async () => {
+            // Byt ut mot nästa recept i turordningen (bara kokboksrecept – andra skulle raderas)
+            if (recipe.in_cookbook) {
+                const swapBtn = actionButton('🔄 Byt', 'swap-btn', async () => {
+                    const result = await api(`/api/week/swap/${recipe.id}`, 'POST');
+                    recipes = result.recipes;
+                    renderAll();
+                }, 'Byt mot ett annat recept från kokboken');
+                actionsRow.appendChild(swapBtn);
+            }
+
+            const cookbookBtn = recipe.in_cookbook
+                ? actionButton('✓ I kokboken', 'cookbook-btn')
+                : actionButton('📖 Spara i kokboken', 'cookbook-btn', () => setFlags(recipe, { in_cookbook: 1 }));
+            cookbookBtn.disabled = !!recipe.in_cookbook;
+            actionsRow.appendChild(cookbookBtn);
+
+            const removeBtn = actionButton('🗑️', 'delete-btn', async () => {
                 if (!recipe.in_cookbook) {
                     const confirmed = confirm(`"${recipe.name}" finns inte i kokboken och tas bort helt. Fortsätta?`);
                     if (!confirmed) return;
                 }
                 await setFlags(recipe, { in_week: 0 });
-            });
-
-            const cookbookBtn = recipe.in_cookbook
-                ? actionButton('✅ I kokboken', 'cookbook-btn')
-                : actionButton('📖 Spara i kokboken', 'cookbook-btn', () => setFlags(recipe, { in_cookbook: 1 }));
-            cookbookBtn.disabled = !!recipe.in_cookbook;
-
+            }, 'Ta bort från veckan');
             actionsRow.appendChild(removeBtn);
-            actionsRow.appendChild(cookbookBtn);
         } else {
             const weekBtn = recipe.in_week
-                ? actionButton('✓ I veckans recept', 'week-btn', () => setFlags(recipe, { in_week: 0 }))
+                ? actionButton('✓ I veckan', 'week-btn', () => setFlags(recipe, { in_week: 0 }), 'Ta bort från veckans recept')
                 : actionButton('➕ Lägg till i veckan', 'week-btn', () => setFlags(recipe, { in_week: 1 }));
             if (recipe.in_week) weekBtn.classList.add('active');
 
-            const removeBtn = actionButton('🗑️ Ta bort ur kokboken', 'delete-btn', async () => {
+            const removeBtn = actionButton('🗑️', 'delete-btn', async () => {
                 const message = recipe.in_week
                     ? `Ta bort "${recipe.name}" ur kokboken? Det finns kvar i veckans recept.`
                     : `Ta bort "${recipe.name}" helt?`;
                 if (!confirm(message)) return;
                 await setFlags(recipe, { in_cookbook: 0 });
-            });
+            }, 'Ta bort ur kokboken');
 
             actionsRow.appendChild(weekBtn);
             actionsRow.appendChild(removeBtn);
@@ -452,84 +540,195 @@ document.addEventListener('DOMContentLoaded', () => {
         return actionsRow;
     }
 
-    // Bygger ett helt receptkort, med pennan som växlar mellan lägena.
-    // I kokboken är korten ihopfällda tills man klickar på "Visa recept".
+    // Kompakt kort: bild, namn, tid/portioner och knappar. Hela receptet öppnas i ett fönster,
+    // så att alla kort blir lika höga och veckan går att överblicka.
     function renderRecipeCard(recipe, context) {
-        const box = document.createElement('div');
-        box.classList.add('recipe');
-        box.dataset.id = recipe.id;
+        const card = document.createElement('article');
+        card.classList.add('recipe', 'recipe-card');
+        card.dataset.id = recipe.id;
 
-        // Rad 1: titel + redigera-penna
-        const titleRow = document.createElement('div');
-        titleRow.classList.add('recipe-title-row');
-
-        const recipeTitle = document.createElement('h2');
-        renderTitle();
-
-        // Titeln är en länk till originalreceptet. Länken ligger inuti rubriken (inte tvärtom),
-        // så att den kan tas bort i redigeringsläget – annars öppnar ett klick i titelfältet sajten.
-        function renderTitle() {
-            recipeTitle.textContent = '';
-            if (recipe.url) {
-                const clickableLink = document.createElement('a');
-                clickableLink.href = recipe.url;
-                clickableLink.target = '_blank';
-                clickableLink.rel = 'noopener';
-                clickableLink.textContent = recipe.name;
-                recipeTitle.appendChild(clickableLink);
-            } else {
-                recipeTitle.textContent = recipe.name;
-            }
+        const media = document.createElement('button');
+        media.type = 'button';
+        media.classList.add('card-media');
+        media.tabIndex = -1; // titeln är samma knapp för tangentbordet
+        media.setAttribute('aria-hidden', 'true');
+        if (recipe.image) {
+            const img = document.createElement('img');
+            img.src = recipe.image;
+            img.alt = '';
+            img.loading = 'lazy';
+            media.appendChild(img);
+        } else {
+            const placeholder = document.createElement('span');
+            placeholder.classList.add('card-placeholder');
+            placeholder.textContent = '🍲';
+            media.appendChild(placeholder);
         }
+        media.addEventListener('click', () => openRecipe(recipe.id));
+        card.appendChild(media);
 
-        const editButton = document.createElement('button');
-        editButton.textContent = '✏️';
-        editButton.type = 'button';
-        editButton.title = 'Redigera';
-        editButton.classList.add('edit-btn');
+        const body = document.createElement('div');
+        body.classList.add('card-body');
 
-        titleRow.appendChild(recipeTitle);
-        titleRow.appendChild(editButton);
-        box.appendChild(titleRow);
+        const title = document.createElement('h3');
+        title.classList.add('card-title');
+        const titleBtn = document.createElement('button');
+        titleBtn.type = 'button';
+        titleBtn.classList.add('card-title-btn');
+        titleBtn.textContent = recipe.name;
+        titleBtn.addEventListener('click', () => openRecipe(recipe.id));
+        title.appendChild(titleBtn);
+        body.appendChild(title);
 
-        // Rad 2: åtgärdsknappar
-        box.appendChild(renderActions(recipe, context));
-
-        // Resten: bild, ingredienser osv.
-        const recipeDiv = document.createElement('div');
-        box.appendChild(recipeDiv);
-
-        let toggleBtn = null;
-        if (context === 'cookbook') {
-            recipeDiv.hidden = true;
-            toggleBtn = document.createElement('button');
-            toggleBtn.type = 'button';
-            toggleBtn.classList.add('toggle-btn');
-            toggleBtn.textContent = 'Visa recept ▾';
-            toggleBtn.addEventListener('click', () => {
-                recipeDiv.hidden = !recipeDiv.hidden;
-                toggleBtn.textContent = recipeDiv.hidden ? 'Visa recept ▾' : 'Dölj recept ▴';
+        const facts = recipeFacts(recipe);
+        if (facts.length) {
+            const list = document.createElement('ul');
+            list.classList.add('card-facts');
+            facts.forEach(fact => {
+                const li = document.createElement('li');
+                li.textContent = fact;
+                list.appendChild(li);
             });
-            box.insertBefore(toggleBtn, recipeDiv);
+            body.appendChild(list);
         }
 
-        function switchToView() {
-            renderTitle();
-            editButton.style.display = 'inline-block';
-            renderViewMode(recipe, recipeDiv);
+        if (context === 'cookbook' && !recipe.in_week) {
+            const lastPlanned = document.createElement('p');
+            lastPlanned.classList.add('last-planned');
+            lastPlanned.textContent = formatLastInWeek(recipe.last_in_week);
+            body.appendChild(lastPlanned);
         }
 
-        editButton.addEventListener('click', () => {
-            editButton.style.display = 'none';
-            recipeDiv.hidden = false;
-            if (toggleBtn) toggleBtn.textContent = 'Dölj recept ▴';
-            renderEditMode(recipe, recipeDiv, recipeTitle, switchToView);
-        });
-
-        renderViewMode(recipe, recipeDiv);
-
-        return box;
+        body.appendChild(renderActions(recipe, context));
+        card.appendChild(body);
+        return card;
     }
+
+    // ---------- Receptfönstret ----------
+
+    const recipeDialog = document.querySelector('#recipe-dialog');
+    const dialogTitle = document.querySelector('#dialog-title');
+    const dialogBody = document.querySelector('#dialog-body');
+    const dialogEditBtn = document.querySelector('#dialog-edit');
+    const dialogCloseBtn = document.querySelector('#dialog-close');
+    let openRecipeId = null;
+
+    const currentRecipe = () => recipes.find(recipe => recipe.id === openRecipeId);
+
+    // Titeln är en länk till originalreceptet (om det finns ett)
+    function renderDialogTitle(recipe) {
+        dialogTitle.textContent = '';
+        if (recipe.url) {
+            const link = document.createElement('a');
+            link.href = recipe.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = recipe.name;
+            link.title = 'Öppna originalreceptet';
+            dialogTitle.appendChild(link);
+        } else {
+            dialogTitle.textContent = recipe.name;
+        }
+    }
+
+    function showRecipe() {
+        const recipe = currentRecipe();
+        if (!recipe) return recipeDialog.close();
+        renderDialogTitle(recipe);
+        dialogEditBtn.hidden = false;
+        renderViewMode(recipe, dialogBody);
+    }
+
+    function editRecipe() {
+        const recipe = currentRecipe();
+        if (!recipe) return;
+        dialogEditBtn.hidden = true;
+        renderEditMode(recipe, dialogBody, dialogTitle, showRecipe);
+    }
+
+    function openRecipe(id, { edit = false } = {}) {
+        openRecipeId = id;
+        showRecipe();
+        if (edit) editRecipe();
+        if (!recipeDialog.open) recipeDialog.showModal();
+        dialogBody.scrollTop = 0;
+        // fokus på innehållet (inte titellänken), så att man kan scrolla med tangentbordet direkt
+        if (!edit) dialogBody.focus({ preventScroll: true });
+    }
+
+    dialogEditBtn.addEventListener('click', editRecipe);
+    dialogCloseBtn.addEventListener('click', () => recipeDialog.close());
+    // klick utanför fönstret stänger det
+    recipeDialog.addEventListener('click', event => {
+        if (event.target === recipeDialog) recipeDialog.close();
+    });
+    recipeDialog.addEventListener('close', () => {
+        openRecipeId = null;
+        dialogBody.innerHTML = '';
+    });
+
+    // ---------- Veckomeny ----------
+
+    const generateWeekBtn = document.querySelector('#generateWeek');
+    const weekCountInput = document.querySelector('#week-count');
+
+    // Antalet kommer ihåg per enhet
+    try {
+        const savedCount = localStorage.getItem('weekCount');
+        if (savedCount) weekCountInput.value = savedCount;
+    } catch {
+        // ignorera
+    }
+    weekCountInput.addEventListener('change', () => {
+        try {
+            localStorage.setItem('weekCount', weekCountInput.value);
+        } catch {
+            // ignorera
+        }
+    });
+
+    // "2026-10-18 13:05:00" (UTC från SQLite) -> "Senast i veckomenyn för 3 veckor sedan"
+    function formatLastInWeek(value) {
+        if (!value) return 'Aldrig i veckomenyn';
+        const days = Math.floor((Date.now() - new Date(value.replace(' ', 'T') + 'Z')) / 86400000);
+        if (days < 1) return 'Senast i veckomenyn i dag';
+        if (days < 7) return `Senast i veckomenyn för ${days} ${days === 1 ? 'dag' : 'dagar'} sedan`;
+        const weeks = Math.floor(days / 7);
+        if (weeks < 9) return `Senast i veckomenyn för ${weeks} ${weeks === 1 ? 'vecka' : 'veckor'} sedan`;
+        return `Senast i veckomenyn för ${Math.floor(days / 30)} månader sedan`;
+    }
+
+    generateWeekBtn.addEventListener('click', async () => {
+        const count = Math.min(14, Math.max(1, parseInt(weekCountInput.value, 10) || 6));
+
+        if (cookbookRecipes().length === 0) {
+            alert('Kokboken är tom. Spara recept i kokboken först, så kan veckomenyn genereras från dem.');
+            return;
+        }
+
+        // Berätta vad som händer innan något byts ut
+        const week = weeklyRecipes();
+        const fromCookbook = week.filter(recipe => recipe.in_cookbook).length;
+        const notInCookbook = week.length - fromCookbook;
+        let message = `Skapa en ny veckomeny med ${count} recept från kokboken?`;
+        if (fromCookbook) message += `\n\n${fromCookbook} recept i nuvarande veckomeny byts ut (de finns kvar i kokboken).`;
+        if (notInCookbook) message += `\n${notInCookbook} recept som inte finns i kokboken ligger kvar och räknas in i antalet.`;
+        if (week.length && !confirm(message)) return;
+
+        generateWeekBtn.disabled = true;
+        try {
+            const result = await api('/api/week/generate', 'POST', { count });
+            recipes = result.recipes;
+            renderAll();
+            if (result.added < result.needed) {
+                alert(`Kokboken räckte till ${result.added} av ${result.needed} recept. Spara fler recept i kokboken för mer variation.`);
+            }
+        } catch (err) {
+            alert(`Kunde inte skapa veckomeny: ${err.message}`);
+        } finally {
+            generateWeekBtn.disabled = false;
+        }
+    });
 
     addManualBtn.addEventListener('click', async () => {
         try {
@@ -544,10 +743,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderWeek();
             document.querySelector('[data-view="recipe"]').click();
 
-            //denna kodrad ser till att redigeringsläget öppnas direkt för att det är ett recept man vill läögga till själv
-            const card = recipeContainer.querySelector(`[data-id="${saved.id}"]`);
-            card.querySelector('.edit-btn').click();
-            card.scrollIntoView({ behavior: 'smooth' });
+            //redigeringsläget öppnas direkt eftersom det är ett recept man vill skriva in själv
+            openRecipe(saved.id, { edit: true });
         } catch (err) {
             alert(`Kunde inte skapa recept: ${err.message}`);
         }
@@ -577,7 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = input.value;
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Hämtar...';
+        submitBtn.textContent = 'Hämtar…';
 
         try {
             const scraped = await api('/api/scrape', 'POST', { url });
@@ -595,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = ' Lägg till recept ';
+            submitBtn.textContent = submitLabel;
         }
     });
 
@@ -801,32 +998,66 @@ document.addEventListener('DOMContentLoaded', () => {
         storeEditor.appendChild(buttonRow);
     }
 
+    const shoppingProgress = document.querySelector('#shopping-progress');
+
+    function updateShoppingProgress() {
+        const total = lastShoppingList.length;
+        const done = lastShoppingList.filter(item => item.checked).length;
+        shoppingProgress.textContent = total
+            ? (done === total ? `Allt är handlat – ${total} varor` : `${done} av ${total} varor handlade`)
+            : 'Automatisk lista från veckans recept';
+    }
+
     function renderShoppingList(shoppingList) {
         lastShoppingList = shoppingList;
         const listContainer = document.querySelector('#shopping-list');
         listContainer.innerHTML = '';
+        updateShoppingProgress();
+
+        if (shoppingList.length === 0) {
+            listContainer.appendChild(emptyMessage('Listan är tom. Tryck "Skapa inköpslista" under Veckan.'));
+            return;
+        }
+
         let currentCategory = null;
         shoppingList.forEach(item => {
             if (item.category !== currentCategory) {
                 const heading = document.createElement('h3');
+                heading.classList.add('shopping-category');
                 heading.textContent = item.category;
                 listContainer.appendChild(heading);
                 currentCategory = item.category;
             }
-            const row = document.createElement('div');
+
+            // <label> gör att hela raden bockar av – lättare att träffa med tummen i butiken
+            const row = document.createElement('label');
             row.classList.add('shopping-item');
             if (item.checked) row.classList.add('checked');
+
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = !!item.checked;
             checkbox.addEventListener('change', async () => {
-                await api(`/api/shopping-list/${item.id}/check`, 'PATCH');
-                row.classList.toggle('checked');
+                row.classList.toggle('checked', checkbox.checked);
+                try {
+                    const result = await api(`/api/shopping-list/${item.id}/check`, 'PATCH');
+                    item.checked = result.checked;
+                    updateShoppingProgress();
+                } catch (err) {
+                    checkbox.checked = !checkbox.checked;
+                    row.classList.toggle('checked', checkbox.checked);
+                    alert(`Kunde inte spara: ${err.message}`);
+                }
             });
+
             const name = document.createElement('span');
+            name.classList.add('item-name');
             name.textContent = item.name;
+
             const amount = document.createElement('span');
-            amount.textContent = item.amount ? `${item.amount} ${item.unit ?? ''}` : '';
+            amount.classList.add('item-amount');
+            amount.textContent = item.amount ? `${formatAmount(item.amount)} ${item.unit ?? ''}`.trim() : '';
+
             row.appendChild(checkbox);
             row.appendChild(name);
             row.appendChild(amount);

@@ -37,33 +37,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if(savedView) showView(savedView);
 
-//animation för tillagda recept
-    const recipeContainer =
-        document.querySelector(
-            '#recipe-container'
-        );
-    if(recipeContainer){
-        const observer = new MutationObserver(
-            mutations => {
-                mutations.forEach(mutation => {
-                    mutation.addedNodes.forEach(node => {
-                        if(
-                            node.nodeType === 1 &&
-                            node.classList.contains('recipe')
-                        ){
-                            node.style.opacity = '0';
-                            setTimeout(() => {
-                                node.style.opacity='1';
-                            },50);
-                        }
-                    });
-                });
-            });
-        observer.observe(
-            recipeContainer,
-            {
-                childList:true
-            }
-        );
-    }
 });

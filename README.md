@@ -14,6 +14,8 @@ Byggt som ett hobbyprojekt för att lösa ett konkret vardagsproblem: sluta skri
 - **Lokala bilder** — bilder laddas ner vid import så att kokboken fungerar även om källsajten tar bort dem
 - **Permanent lagring** i en SQLite-databas — recept och inköpslista finns kvar även efter att sidan laddats om
 - **Kokbok** — egen flik med sökning på namn och ingredienser; recept flyttas mellan kokboken och veckans recept
+- **Generera veckomeny** — en knapp fyller veckan med recept från kokboken, de som var längst sedan i veckomenyn först, så att det inte blir samma rätter varje vecka. Enskilda recept kan bytas ut eller tas bort
+- **Flera butiker** — välj butik i inköpslistan och ändra i vilken ordning avdelningarna kommer
 - **Automatisk backup** av databasen, för drift på en egen server
 - **Automatisk inköpslista** som slår ihop dubbletter, kategoriserar ingredienser (mejeri, kött, grönt, osv.) och sorterar dem enligt en hårdkodad gångordning genom butiken
 - **Avbockningsbara varor** i inköpslistan, med status sparad i databasen
