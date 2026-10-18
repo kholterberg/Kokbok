@@ -111,7 +111,7 @@ git clone https://github.com/kalleholterberg/Recipehub.git
 cd Recipehub
 mkdir -p data backups
 sudo chown -R 1000:1000 data backups   # containern kör som uid 1000, inte root
-cp .env.example .env                   # fyll i AUTH_USER/AUTH_PASSWORD för inloggning
+cp .env.example .env                   # port och ev. inloggning (AUTH_USER/AUTH_PASSWORD)
 docker compose up -d --build
 ```
 
@@ -122,6 +122,7 @@ Har du redan en `recept.db` lokalt: kopiera den till `data/recept.db` innan star
 | Variabel | Standard | Beskrivning |
 |---|---|---|
 | `PORT` | `3000` | Port som servern lyssnar på |
+| `RECIPEHUB_PORT` | `3000` | Port utåt i Docker (sätts i `.env`) – byt om 3000 redan används |
 | `DB_PATH` | `./recept.db` (`/data/recept.db` i Docker) | Sökväg till databasen |
 | `IMAGE_DIR` | `./images` (`/data/images` i Docker) | Var receptbilder sparas |
 | `AUTH_USER` / `AUTH_PASSWORD` | – | Slår på inloggning om båda är satta |

@@ -5,7 +5,8 @@ services:
     container_name: recipehub
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Porten utåt sätts i .env (RECIPEHUB_PORT=3010), annars 3000
+      - "${RECIPEHUB_PORT:-3000}:3000"
     env_file:
       - path: .env
         required: false
