@@ -153,7 +153,7 @@ button:hover {
 }
 
 /* RECEPT */
-#recipe-container {
+.recipe-grid {
     display:grid;
     grid-template-columns:
         repeat(auto-fill,minmax(320px,1fr));
@@ -257,7 +257,8 @@ button:hover {
         align-items:flex-start;
     }
 }
-.shopping-item.completed {
+.shopping-item.completed,
+.shopping-item.checked {
     opacity:.5;
     text-decoration:line-through;
 }
@@ -359,4 +360,131 @@ button:hover {
     color: #15803d;
     border-color: #86efac;
     cursor: default;
+}
+.recipe-meta {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 8px 0;
+}
+
+.recipe-meta a {
+    color: inherit;
+}
+
+.recipe h3,
+.recipe h4 {
+    margin: 16px 0 6px;
+}
+
+.recipe-instructions {
+    padding-left: 1.4em;
+    line-height: 1.5;
+}
+
+.recipe-instructions li {
+    margin-bottom: 6px;
+}
+
+.instructions-input {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 8px;
+}
+
+/* KOKBOK */
+#cookbook-search {
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    font-size: 15px;
+    width: min(360px, 100%);
+    background: #faf9f6;
+}
+
+#cookbook-search:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.recipe-grid {
+    align-items: start;
+}
+
+.empty-message {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    text-align: center;
+    padding: 40px 0;
+}
+
+.toggle-btn {
+    background: none;
+    color: var(--primary);
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+.toggle-btn:hover {
+    transform: none;
+    text-decoration: underline;
+}
+
+.week-btn.active {
+    background-color: #e7efe7;
+    color: var(--primary-dark);
+    border-color: #b5c9b5;
+}
+
+.action-btn:disabled {
+    cursor: default;
+}
+
+/* REDIGERING */
+.edit-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.save-btn {
+    color: white;
+}
+
+.cancel-btn {
+    margin-top: 12px;
+    background: #f0eee9;
+    color: var(--text);
+}
+
+.image-upload {
+    display: block;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.image-upload input {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+}
+
+.recipe-title-input {
+    width: 100%;
+    font: inherit;
+    padding: 4px 8px;
+}
+
+@media (max-width: 600px) {
+    .view-switch {
+        width: auto;
+        margin: 20px 16px;
+        display: flex;
+    }
+
+    .tab {
+        flex: 1;
+        padding: 10px 6px;
+        font-size: 13px;
+    }
 }

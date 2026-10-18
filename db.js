@@ -1,5 +1,9 @@
+const path = require('path');
 const Database = require('better-sqlite3');
-const db = new Database('recept.db');
+
+// DB_PATH gör att databasen kan ligga på en volym (t.ex. /data/recept.db i Docker)
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'recept.db');
+const db = new Database(dbPath);
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS recipes (
@@ -30,4 +34,50 @@ db.exec(`
     );
 `);
 
+// Nya kolumner läggs till i efterhand så att en befintlig recept.db inte behöver raderas
+const newRecipeColumns = {
+    description: 'TEXT',
+    instructions: 'TEXT',   // JSON-array med steg
+    servings: 'TEXT',
+    total_time: 'INTEGER',  // minuter
+    created_at: 'TEXT',
+    in_week: 'INTEGER DEFAULT 1', // med i veckans recept (oberoende av kokboken)
+    url_key: 'TEXT'               // normaliserad URL, för dubblettkontroll
+};
+
+const existingColumns = db.prepare('PRAGMA table_info(recipes)').all().map(col => col.name);
+for (const [column, type] of Object.entries(newRecipeColumns)) {
+    if (!existingColumns.includes(column)) {
+        db.exec(`ALTER TABLE recipes ADD COLUMN ${column} ${type}`);
+    }
+}
+
+// Samma recept kan länkas på flera sätt: med/utan www, avslutande snedstreck, #hash eller ?utm_source=...
+function normalizeUrl(url) {
+    try {
+        const parsed = new URL(url);
+        for (const param of [...parsed.searchParams.keys()]) {
+            if (/^(utm_|fbclid|gclid|ref$)/i.test(param)) parsed.searchParams.delete(param);
+        }
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        const pathname = parsed.pathname.replace(/\/+$/, '');
+        return `${host}${pathname}${parsed.search}`;
+    } catch {
+        return null;
+    }
+}
+
+// Fyll i url_key för recept som sparades innan kolumnen fanns
+const missingKeys = db.prepare("SELECT id, url FROM recipes WHERE url_key IS NULL AND url != ''").all();
+const setKey = db.prepare('UPDATE recipes SET url_key = ? WHERE id = ?');
+for (const row of missingKeys) setKey.run(normalizeUrl(row.url), row.id);
+
+try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_recipes_url_key ON recipes(url_key) WHERE url_key IS NOT NULL');
+} catch {
+    // finns det redan dubbletter i databasen går indexet inte att skapa – servern kollar ändå i koden
+    console.warn('Databasen innehåller dubbletter av recept, unikt index skapades inte');
+}
+
 module.exports = db;
+module.exports.normalizeUrl = normalizeUrl;

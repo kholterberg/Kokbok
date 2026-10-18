@@ -6,14 +6,18 @@ Byggt som ett hobbyprojekt för att lösa ett konkret vardagsproblem: sluta skri
 
 ## Funktioner
 
-- **Scraping av recept** från stödda sajter (för närvarande ICA och Coop), via JSON-LD (schema.org) eller sajtspecifika API-anrop
+- **Scraping av recept** från i princip alla stora receptsajter (ICA, Arla, Köket, Tasteline, Zeta, BBC Good Food m.fl.) via en generell JSON-LD-scraper (schema.org/Recipe), plus sajtspecifik hantering för Coop
+- **Instruktioner, portioner och tillagningstid** hämtas med, inte bara ingredienserna
+- **Dubblettkontroll** — samma recept sparas inte två gånger, även om länken skiljer sig (www, `?utm_...`, `#...`)
 - **Manuellt tillagda recept** för egna eller familjerecept som inte finns online, inklusive bilduppladdning
-- **Redigeringsläge** per recept — justera ingredienser, mängder och namn innan de sparas, eftersom scraping aldrig är helt felfritt
+- **Redigeringsläge** per recept — justera namn, bild, ingredienser och instruktioner; sparas i databasen, med möjlighet att avbryta
+- **Lokala bilder** — bilder laddas ner vid import så att kokboken fungerar även om källsajten tar bort dem
 - **Permanent lagring** i en SQLite-databas — recept och inköpslista finns kvar även efter att sidan laddats om
-- **Kokbok** — markera recept som värda att spara permanent, separat från veckans tillfälliga recept
+- **Kokbok** — egen flik med sökning på namn och ingredienser; recept flyttas mellan kokboken och veckans recept
+- **Automatisk backup** av databasen, för drift på en egen server
 - **Automatisk inköpslista** som slår ihop dubbletter, kategoriserar ingredienser (mejeri, kött, grönt, osv.) och sorterar dem enligt en hårdkodad gångordning genom butiken
 - **Avbockningsbara varor** i inköpslistan, med status sparad i databasen
-- **Responsivt gränssnitt** med flikar för recept respektive inköpslista
+- **Responsivt gränssnitt** med flikar för veckans recept, kokbok och inköpslista
 
 ## Teknikstack
 
@@ -34,11 +38,19 @@ Recipehub/
 ├── storeLayouts.js            # Butikers gångordning (kategori → position)
 ├── ingredientCategories.js    # Manuell mappning: ingrediensnamn → kategori
 ├── shoppingList.js            # Logik för kategorisering och sortering
+├── auth.js                    # Valfri inloggning (HTTP Basic Auth)
+├── images.js                  # Nedladdning och lagring av receptbilder
+├── backup.js                  # Backup av databasen (manuell + schemalagd)
+├── scripts/
+│   ├── backup.js               # npm run backup
+│   └── localize-images.js      # npm run images – laddar ner bilder för äldre recept
 ├── scrapers/
-│   ├── index.js                # Väljer rätt scraper baserat på URL:ens domän
-│   ├── ica.js                  # Scraping via JSON-LD (schema.org)
-│   ├── coop.js                 # Scraping via sajtens interna API
+│   ├── index.js                # Väljer specialscraper per domän, annars JSON-LD
+│   ├── jsonld.js               # Generell scraper för schema.org/Recipe
+│   ├── coop.js                 # Scraping via Coops interna API
 │   └── utils.js                # Parsing av ingrediens-strängar till {name, amount, unit}
+├── Dockerfile
+├── docker-compose.yml
 └── public/
     ├── index.html
     ├── index.js                 # All receptlogik: rendering, redigering, spara, inköpslista
@@ -53,15 +65,20 @@ Olika hemsidor strukturerar sin receptdata på helt olika sätt, så varje sajt 
 - **ICA** har receptdata inbäddad direkt i sidans HTML som JSON-LD (`<script type="application/ld+json">`), vilket är standardformatet `schema.org/Recipe` — enklast att läsa av.
 - **Coop** renderar sidan med JavaScript (React), så receptdatan finns inte i den råa HTML:en. Istället läses ett dolt recept-ID ut ur sidan, som sedan används för att anropa Coops eget interna API direkt.
 
+- **Alla andra sajter** går via den generella JSON-LD-scrapern, som letar igenom alla JSON-LD-block (även `@graph`) efter ett `Recipe`. De flesta stora receptsajter lägger ut sina recept så, eftersom Google använder det för att visa recept i sökresultaten.
+
 Varje scraper normaliserar sin sajts unika dataformat till en gemensam struktur:
 ```js
 {
   name: "Receptets namn",
   image: "https://...",
+  servings: "4 portioner",
+  total_time: 45,               // minuter
   ingredients: [
     { name: "smör", amount: 100, unit: "g" },
     ...
-  ]
+  ],
+  instructions: ["Sätt ugnen på 200°C.", "## Sås", "Vispa ihop..."]  // "## " = rubrik
 }
 ```
 Detta gör att resten av applikationen (visning, redigering, inköpslista) aldrig behöver bry sig om varifrån receptet kom.
@@ -72,13 +89,11 @@ Ingredienser mappas mot butikskategorier via en manuellt underhållen tabell (`i
 
 ## Kommande funktioner
 
-- [ ] Fler sajt-scrapers (bland annat Arla Köket)
 - [ ] Möjlighet att välja mellan flera butikslayouter i gränssnittet
 - [ ] Bildkomprimering vid uppladdning
-- [ ] Duplikatkontroll vid scraping (undvik att spara samma recept två gånger)
 - [ ] Veckoplanering kopplad till kalenderdagar
-- [ ] Separat kokboks-vy, frikopplad från veckans recept
-- [ ] Enkelt lösenordsskydd inför eventuell driftsättning
+- [ ] Portionsskalning
+- [ ] Slå inte ihop samma ingrediens med olika enheter i inköpslistan (2 dl + 100 g)
 
 ## Köra projektet lokalt
 
@@ -90,6 +105,50 @@ node server.js
 ```
 
 Öppna sedan `http://localhost:3000` i webbläsaren.
+
+## Driftsättning i homelab (Docker)
+
+```bash
+git clone https://github.com/kalleholterberg/Recipehub.git
+cd Recipehub
+mkdir -p data backups
+sudo chown -R 1000:1000 data backups   # containern kör som uid 1000, inte root
+cp .env.example .env                   # fyll i AUTH_USER/AUTH_PASSWORD för inloggning
+docker compose up -d --build
+```
+
+Har du redan en `recept.db` lokalt: kopiera den till `data/recept.db` innan start, och kör sedan `docker compose exec recipehub npm run images` för att ladda ner bilderna till de gamla recepten.
+
+### Inställningar (miljövariabler)
+
+| Variabel | Standard | Beskrivning |
+|---|---|---|
+| `PORT` | `3000` | Port som servern lyssnar på |
+| `DB_PATH` | `./recept.db` (`/data/recept.db` i Docker) | Sökväg till databasen |
+| `IMAGE_DIR` | `./images` (`/data/images` i Docker) | Var receptbilder sparas |
+| `AUTH_USER` / `AUTH_PASSWORD` | – | Slår på inloggning om båda är satta |
+| `BACKUP_DIR` | – | Slår på automatisk backup till denna mapp |
+| `BACKUP_INTERVAL_HOURS` | `24` | Hur ofta backup tas |
+| `BACKUP_KEEP` | `14` | Antal backuper som sparas |
+
+### Inloggning och åtkomst utifrån
+
+Den inbyggda inloggningen (Basic Auth) räcker på hemnätverket eller via VPN (Tailscale/WireGuard). Ska sidan nås från internet: lägg den bakom en reverse proxy med HTTPS, t.ex. Caddy:
+
+```
+recept.example.se {
+    reverse_proxy localhost:3000
+}
+```
+
+Basic Auth skickar lösenordet med varje anrop, så använd det **bara över HTTPS** utanför hemnätet. Har proxyn egen inloggning (Authelia, Authentik) kan `AUTH_USER`/`AUTH_PASSWORD` lämnas tomma.
+
+### Backup
+
+- Databasen backas upp automatiskt till `./backups` (se `docker-compose.yml`). Lägg gärna den mappen på en annan disk eller NAS.
+- Manuellt: `docker compose exec recipehub npm run backup` (eller `npm run backup` lokalt).
+- Bilderna ligger i `./data/images` – ta med hela `data`-mappen i din vanliga backup.
+- Återställning: stoppa containern, kopiera en backup till `data/recept.db`, starta igen.
 
 ## Bakgrund
 

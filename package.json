@@ -1,4 +1,14 @@
 {
+  "name": "recipehub",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "backup": "node scripts/backup.js",
+    "images": "node scripts/localize-images.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "axios": "^1.18.1",
     "better-sqlite3": "^12.11.1",

@@ -9,7 +9,7 @@ async function scrapeIcaRecipe(url) {
     const $ = cheerio.load(response.data);
 
     const script = $('script[type="application/ld+json"]').html();
-    if (!script) 
+    if (!script)
         return null;
 
     const data = JSON.parse(script);

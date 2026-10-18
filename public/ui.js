@@ -1,51 +1,41 @@
 'use strict';
 document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('.tab');
-    const recipeView = document.querySelector('#recipe-view');
-    const shoppingView = document.querySelector('#shopping-view');
 
-//vxläingsläger mellan recpet och inköpslista
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const selectedView = tab.dataset.view;
-            // ta bort aktiv klass från alla knappar
-            tabs.forEach(button => {
-                button.classList.remove('active');
-            });
-            // aktivera vald knapp
-            tab.classList.add('active');
-            if(selectedView === 'recipes'){
-                showRecipes();
-            } else {
-                showShopping();
-            }
+//vxläingsläger mellan veckans recept, kokbok och inköpslista
+// varje flik har data-view="x" och en panel med id="x-view"
+    function showView(selectedView){
+        const panel = document.querySelector(`#${selectedView}-view`);
+        if(!panel) return;
 
-            // spara valt läge
-            localStorage.setItem(
-                'recipeView',
-                selectedView
-            );
+        tabs.forEach(button => {
+            button.classList.toggle('active', button.dataset.view === selectedView);
         });
+        document.querySelectorAll('.view-panel').forEach(view => {
+            view.classList.toggle('active-panel', view === panel);
+        });
+
+        // spara valt läge, och visa det i adressen så att t.ex. /#cookbook går att bokmärka
+        history.replaceState(null, '', `#${selectedView}`);
+        try {
+            localStorage.setItem('recipeView', selectedView);
+        } catch {
+            // localStorage kan vara avstängt (t.ex. privat läge) – inte viktigt
+        }
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => showView(tab.dataset.view));
     });
 
-    function showRecipes(){
-        shoppingView.classList.remove(
-            'active-panel'
-        );
-
-        recipeView.classList.add(
-            'active-panel'
-        );
+    // öppna fliken från adressen (#cookbook), annars samma flik som sist
+    let savedView = location.hash.slice(1);
+    try {
+        savedView = savedView || localStorage.getItem('recipeView');
+    } catch {
+        // ignorera
     }
-
-    function showShopping(){
-        recipeView.classList.remove(
-            'active-panel'
-        );
-        shoppingView.classList.add(
-            'active-panel'
-        );
-    }
+    if(savedView) showView(savedView);
 
 //animation för tillagda recept
     const recipeContainer =

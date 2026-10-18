@@ -1,0 +1,9 @@
+node_modules
+.git
+*.db
+data
+backups
+images
+.env
+Dockerfile
+docker-compose.yml

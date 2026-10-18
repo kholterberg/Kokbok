@@ -1,14 +1,14 @@
-const { scrapeIcaRecipe } = require('./ica');
 const { scrapeCoopRecipe } = require('./coop');
+const { scrapeJsonLdRecipe } = require('./jsonld');
 
+// Sajter som behöver specialhantering. Alla andra går via den generella JSON-LD-scrapern.
 const scrapers = {
-    'ica.se': scrapeIcaRecipe,
-    'coop.se': scrapeCoopRecipe,
+    'coop.se': scrapeCoopRecipe
 };
 
 function getScraperForUrl(url) {
-    const hostname = new URL(url).hostname.replace('www.', '');
-    return scrapers[hostname];
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return scrapers[hostname] || scrapeJsonLdRecipe;
 }
 
 module.exports = { getScraperForUrl };

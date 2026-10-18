@@ -1,49 +1,64 @@
 <!DOCTYPE html>
 <html lang="sv">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe-Hub 🍽️</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<header class="app-header">
-    <div class="brand">
-        <h1>🍽️ RecipeHub</h1>
-        <p>Dina recept och inköpslistor samlade</p>
-    </div>
-    <form id="ReceptForm">
-        <input type="url" id="url" placeholder="Klistra in receptlänk..." required>
-        <button type="submit"> Lägg till recept </button>
-    </form>
-    <button id="addManualRecipe"> + </button>
-</header>
-<nav class="view-switch">
-    <button class="tab active" data-view="recipes"> 📖 Recept </button>
-    <button class="tab" data-view="shopping"> 🛒 Inköpslista</button>
-</nav>
-<main class="app-container">
-<section id="recipe-view" class="view-panel active-panel">
-    <div class="panel-header">
-        <div>
-            <h2> Mina recept </h2>
-            <span> Samlade veckans favoriter </span>
-        </div>
-        <button id="generateList" class="primary-button"> 🛒 Skapa inköpslista </button>
-    </div>
 
-    <div id="recipe-container"> </div>
-</section>
-<section id="shopping-view" class="view-panel">
-    <div class="shopping-header">
-        <h2> 🛒 Inköpslista </h2>
-        <p> Automatisk lista från dina recept</p>
-    </div>
-    <button id="clearList">🧹 Rensa inköpslista</button>
-    <div id="shopping-list"></div>
-</section>
-</main>
-<script src="index.js"></script>
-<script src="ui.js"></script>
+<body>
+    <header class="app-header">
+        <div class="brand">
+            <h1>🍽️ RecipeHub</h1>
+            <p>Dina recept och inköpslistor samlade</p>
+        </div>
+        <form id="ReceptForm">
+            <input type="url" id="url" placeholder="Klistra in receptlänk..." required>
+            <button type="submit"> Lägg till recept </button>
+        </form>
+        <button id="addManualRecipe" title="Lägg till eget recept"> + </button>
+    </header>
+    <nav class="view-switch">
+        <button class="tab active" data-view="recipe"> 🗓️ Veckans recept </button>
+        <button class="tab" data-view="cookbook"> 📖 Kokbok </button>
+        <button class="tab" data-view="shopping"> 🛒 Inköpslista</button>
+    </nav>
+    <main class="app-container">
+        <section id="recipe-view" class="view-panel active-panel">
+            <div class="panel-header">
+                <div>
+                    <h2> Veckans recept </h2>
+                    <span> Det du ska laga den här veckan </span>
+                </div>
+                <button id="generateList" class="primary-button"> 🛒 Skapa inköpslista </button>
+            </div>
+
+            <div id="recipe-container" class="recipe-grid"> </div>
+        </section>
+        <section id="cookbook-view" class="view-panel">
+            <div class="panel-header">
+                <div>
+                    <h2> Kokbok </h2>
+                    <span id="cookbook-count"> Dina sparade favoriter </span>
+                </div>
+                <input type="search" id="cookbook-search" placeholder="Sök på namn eller ingrediens...">
+            </div>
+
+            <div id="cookbook-container" class="recipe-grid"> </div>
+        </section>
+        <section id="shopping-view" class="view-panel">
+            <div class="shopping-header">
+                <h2> 🛒 Inköpslista </h2>
+                <p> Automatisk lista från dina recept</p>
+            </div>
+            <button id="clearList">🧹 Rensa inköpslista</button>
+            <div id="shopping-list"></div>
+        </section>
+    </main>
+    <script src="index.js"></script>
+    <script src="ui.js"></script>
 </body>
+
 </html>

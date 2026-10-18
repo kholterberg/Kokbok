@@ -1,0 +1,21 @@
+services:
+  recipehub:
+    build: .
+    image: recipehub:latest
+    container_name: recipehub
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: Europe/Stockholm
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_HOURS: 24
+      BACKUP_KEEP: 14
+    volumes:
+      # Databas och bilder. Måste ägas av uid 1000: sudo chown -R 1000:1000 data backups
+      - ./data:/data
+      # Lägg gärna backuperna på en annan disk/NAS, t.ex. /mnt/nas/recipehub-backups:/backups
+      - ./backups:/backups
