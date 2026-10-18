@@ -473,3 +473,114 @@ button:hover {
         font-size: 13px;
     }
 }
+
+/* BUTIKER: val av butik och ordning på avdelningarna */
+.store-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.store-bar label {
+    font-weight: 600;
+}
+
+#store-select {
+    flex: 1;
+    min-width: 160px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 15px;
+}
+
+.store-bar .action-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.store-editor {
+    background: white;
+    border-radius: 22px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+
+.store-name-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font: inherit;
+    font-weight: 600;
+}
+
+.store-hint {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.store-categories {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 8px;
+    counter-reset: avdelning;
+}
+
+.store-categories li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    border-bottom: 1px solid var(--border);
+    counter-increment: avdelning;
+}
+
+.store-categories li::before {
+    content: counter(avdelning);
+    width: 24px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: right;
+}
+
+.store-category-name {
+    flex: 1;
+}
+
+.store-category-count {
+    font-size: 12px;
+    color: var(--primary-dark);
+    background: #e7efe7;
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+
+.move-btn {
+    width: 40px;
+    height: 36px;
+    padding: 0;
+    border-radius: 10px;
+    background: #f0eee9;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.move-btn:disabled {
+    opacity: .3;
+    cursor: default;
+}
+
+.move-btn:hover {
+    transform: none;
+    background: #e6e2d9;
+}
+
+.store-delete-btn {
+    margin-top: 12px;
+    margin-left: auto;
+}

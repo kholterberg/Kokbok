@@ -1,8 +1,10 @@
 const ingredientCategories = require('./ingredientCategories');
-const storeLayouts = require('./storeLayouts');
 
 //kollar först längd på ingrediensen för att ex eliminera 'ost' i 'rostad lök' som kan leda till att det hamnar under fel kategori i inklöpslistan
 const sortedKeys = Object.keys(ingredientCategories).sort((a, b) => b.length - a.length);
+
+// Alla kategorier som ingredienser kan hamna i
+const knownCategories = [...new Set(Object.values(ingredientCategories)), 'okategoriserad'];
 
 function getCategoryForIngredient(name) { // gör om alla ingredienser till lower case och sedan matchar mot butikens layout och katoegrier
     const normalized = name.toLowerCase().trim();
@@ -14,17 +16,27 @@ function getCategoryForIngredient(name) { // gör om alla ingredienser till lowe
     return 'okategoriserad';
 }
 
-function sortByStoreLayout(shoppingListItems, storeKey) {
-    const layout = storeLayouts[storeKey];
-    if (!layout) return shoppingListItems;
+// layout = kategorierna i den ordning man går genom butiken.
+// Kategorier som inte finns i layouten hamnar sist. Sorteringen är stabil, så varorna
+// behåller sin inbördes ordning inom en kategori.
+function sortByStoreLayout(shoppingListItems, layout) {
+    if (!layout || layout.length === 0) return shoppingListItems;
 
-    return [...shoppingListItems].sort((a, b) => {
-        const indexA = layout.indexOf(a.category);
-        const indexB = layout.indexOf(b.category);
-        const posA = indexA === -1 ? layout.length : indexA;
-        const posB = indexB === -1 ? layout.length : indexB;
-        return posA - posB;
-    });
+    const position = category => {
+        const index = layout.indexOf(category);
+        return index === -1 ? layout.length : index;
+    };
+    return [...shoppingListItems].sort((a, b) => position(a.category) - position(b.category));
 }
 
-module.exports = { getCategoryForIngredient, sortByStoreLayout };
+// Butikens ordning, kompletterad med kategorier den inte känner till än (t.ex. en ny kategori
+// i ingredientCategories.js), så att alla går att flytta i redigeringsvyn
+function withAllCategories(layout, extraCategories = []) {
+    const all = [...layout];
+    for (const category of [...knownCategories, ...extraCategories]) {
+        if (category && !all.includes(category)) all.push(category);
+    }
+    return all;
+}
+
+module.exports = { getCategoryForIngredient, sortByStoreLayout, withAllCategories };

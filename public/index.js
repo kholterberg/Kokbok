@@ -54,9 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadSavedShoppingList() {
         const shoppingList = await api('/api/shopping-list');
-        if (shoppingList.length > 0) {
-            renderShoppingList(shoppingList);
-        }
+        renderShoppingList(shoppingList);
     }
 
     loadSavedShoppingList();
@@ -560,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirmed) return;
 
         await api('/api/shopping-list', 'DELETE');
-        document.querySelector('#shopping-list').innerHTML = '';
+        renderShoppingList([]);
     });
 
     // Om receptet redan finns: erbjud att lägga till det i veckan i stället för att spara en dubblett
@@ -601,7 +599,210 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ---------- Butiker: i vilken ordning kategorierna kommer i inköpslistan ----------
+
+    const storeSelect = document.querySelector('#store-select');
+    const editStoreBtn = document.querySelector('#editStore');
+    const addStoreBtn = document.querySelector('#addStore');
+    const storeEditor = document.querySelector('#store-editor');
+
+    let stores = [];
+    let activeStoreId = null;
+    let lastShoppingList = []; // används för att visa hur många varor varje kategori har
+
+    async function loadStores() {
+        const data = await api('/api/stores');
+        stores = data.stores;
+        activeStoreId = data.activeStoreId;
+        renderStoreSelect();
+    }
+
+    loadStores();
+
+    function activeStore() {
+        return stores.find(store => store.id === activeStoreId);
+    }
+
+    function renderStoreSelect() {
+        storeSelect.innerHTML = '';
+        stores.forEach(store => {
+            storeSelect.add(new Option(store.name, store.id, false, store.id === activeStoreId));
+        });
+    }
+
+    // Byt butik -> listan sorteras om direkt (avbockningar finns kvar)
+    async function activateStore(id) {
+        const shoppingList = await api(`/api/stores/${id}/activate`, 'POST');
+        activeStoreId = id;
+        renderStoreSelect();
+        renderShoppingList(shoppingList);
+    }
+
+    storeSelect.addEventListener('change', async () => {
+        storeEditor.hidden = true;
+        try {
+            await activateStore(Number(storeSelect.value));
+        } catch (err) {
+            alert(`Kunde inte byta butik: ${err.message}`);
+            renderStoreSelect();
+        }
+    });
+
+    addStoreBtn.addEventListener('click', async () => {
+        const name = prompt('Vad heter butiken?\n(Den börjar med samma ordning som nuvarande butik.)');
+        if (!name || !name.trim()) return;
+        try {
+            const created = await api('/api/stores', 'POST', { name });
+            stores.push(created);
+            await activateStore(created.id);
+            renderStoreEditor(created);
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    editStoreBtn.addEventListener('click', () => {
+        if (!storeEditor.hidden) {
+            storeEditor.hidden = true;
+            return;
+        }
+        const store = activeStore();
+        if (store) renderStoreEditor(store);
+    });
+
+    // Redigeringsvy: byt namn, flytta kategorier med ▲/▼ (fungerar även på mobil), ta bort butiken
+    function renderStoreEditor(store) {
+        const draft = { name: store.name, categories: [...store.categories] };
+        storeEditor.innerHTML = '';
+        storeEditor.hidden = false;
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = draft.name;
+        nameInput.classList.add('store-name-input');
+        nameInput.setAttribute('aria-label', 'Butikens namn');
+        nameInput.addEventListener('input', () => {
+            draft.name = nameInput.value;
+        });
+        storeEditor.appendChild(nameInput);
+
+        const hint = document.createElement('p');
+        hint.classList.add('store-hint');
+        hint.textContent = 'Ordna avdelningarna i den ordning du går genom butiken.';
+        storeEditor.appendChild(hint);
+
+        const counts = {};
+        lastShoppingList.forEach(item => {
+            counts[item.category] = (counts[item.category] || 0) + 1;
+        });
+
+        const list = document.createElement('ol');
+        list.classList.add('store-categories');
+        storeEditor.appendChild(list);
+
+        function moveCategory(index, direction) {
+            const target = index + direction;
+            [draft.categories[index], draft.categories[target]] = [draft.categories[target], draft.categories[index]];
+            renderRows();
+            // behåll fokus på samma knapp, så att man kan klicka flera gånger i rad
+            const row = list.children[target];
+            const sameButton = row && row.querySelector(direction < 0 ? '.move-up' : '.move-down');
+            if (sameButton && !sameButton.disabled) sameButton.focus();
+        }
+
+        function renderRows() {
+            list.innerHTML = '';
+            draft.categories.forEach((category, index) => {
+                const li = document.createElement('li');
+
+                const name = document.createElement('span');
+                name.classList.add('store-category-name');
+                name.textContent = category;
+                li.appendChild(name);
+
+                if (counts[category]) {
+                    const badge = document.createElement('span');
+                    badge.classList.add('store-category-count');
+                    badge.textContent = `${counts[category]} i listan`;
+                    li.appendChild(badge);
+                }
+
+                const upBtn = document.createElement('button');
+                upBtn.type = 'button';
+                upBtn.textContent = '▲';
+                upBtn.title = 'Flytta upp';
+                upBtn.classList.add('move-btn', 'move-up');
+                upBtn.disabled = index === 0;
+                upBtn.addEventListener('click', () => moveCategory(index, -1));
+
+                const downBtn = document.createElement('button');
+                downBtn.type = 'button';
+                downBtn.textContent = '▼';
+                downBtn.title = 'Flytta ner';
+                downBtn.classList.add('move-btn', 'move-down');
+                downBtn.disabled = index === draft.categories.length - 1;
+                downBtn.addEventListener('click', () => moveCategory(index, 1));
+
+                li.appendChild(upBtn);
+                li.appendChild(downBtn);
+                list.appendChild(li);
+            });
+        }
+        renderRows();
+
+        const buttonRow = document.createElement('div');
+        buttonRow.classList.add('edit-buttons');
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Spara';
+        saveBtn.classList.add('save-btn');
+        saveBtn.addEventListener('click', async () => {
+            try {
+                const updated = await api(`/api/stores/${store.id}`, 'PUT', draft);
+                stores = stores.map(s => (s.id === updated.id ? updated : s));
+                renderStoreSelect();
+                storeEditor.hidden = true;
+                await loadSavedShoppingList(); // sortera om efter den nya ordningen
+            } catch (err) {
+                alert(`Kunde inte spara: ${err.message}`);
+            }
+        });
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.textContent = 'Avbryt';
+        cancelBtn.classList.add('cancel-btn');
+        cancelBtn.addEventListener('click', () => {
+            storeEditor.hidden = true;
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '🗑️ Ta bort butik';
+        deleteBtn.classList.add('action-btn', 'delete-btn', 'store-delete-btn');
+        deleteBtn.disabled = stores.length <= 1;
+        deleteBtn.title = stores.length <= 1 ? 'Det måste finnas minst en butik' : '';
+        deleteBtn.addEventListener('click', async () => {
+            if (!confirm(`Ta bort "${store.name}"?`)) return;
+            try {
+                const result = await api(`/api/stores/${store.id}`, 'DELETE');
+                stores = stores.filter(s => s.id !== store.id);
+                storeEditor.hidden = true;
+                await activateStore(result.activeStoreId);
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        buttonRow.appendChild(saveBtn);
+        buttonRow.appendChild(cancelBtn);
+        buttonRow.appendChild(deleteBtn);
+        storeEditor.appendChild(buttonRow);
+    }
+
     function renderShoppingList(shoppingList) {
+        lastShoppingList = shoppingList;
         const listContainer = document.querySelector('#shopping-list');
         listContainer.innerHTML = '';
         let currentCategory = null;

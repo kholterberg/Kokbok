@@ -79,5 +79,32 @@ try {
     console.warn('Databasen innehåller dubbletter av recept, unikt index skapades inte');
 }
 
+// Butiker och deras gångordning (kategorierna i den ordning man går genom butiken)
+db.exec(`
+    CREATE TABLE IF NOT EXISTS stores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        categories TEXT NOT NULL  -- JSON-array med kategorinamn
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+`);
+
+// Första gången: skapa butikerna från storeLayouts.js, så att den inlästa planlösningen följer med
+if (db.prepare('SELECT COUNT(*) AS count FROM stores').get().count === 0) {
+    const storeLayouts = require('./storeLayouts');
+    const insertStore = db.prepare('INSERT INTO stores (name, categories) VALUES (?, ?)');
+    for (const [key, categories] of Object.entries(storeLayouts)) {
+        // 'ica-maxi-valsviken' -> 'ICA Maxi Valsviken'
+        const name = key.split('-')
+            .map(word => word === 'ica' ? 'ICA' : word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+        insertStore.run(name, JSON.stringify(categories));
+    }
+}
+
 module.exports = db;
 module.exports.normalizeUrl = normalizeUrl;

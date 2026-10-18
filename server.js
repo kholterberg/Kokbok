@@ -1,7 +1,7 @@
 const path = require('path');
 const express = require('express');
 const { getScraperForUrl } = require('./scrapers');
-const { getCategoryForIngredient, sortByStoreLayout } = require('./shoppingList');
+const { getCategoryForIngredient, sortByStoreLayout, withAllCategories } = require('./shoppingList');
 const db = require('./db');
 const { normalizeUrl } = require('./db');
 const { basicAuth } = require('./auth');
@@ -69,14 +69,13 @@ app.post('/api/shopping-list', (req, res) => {
             }
         }
 
-        const list = sortByStoreLayout(Object.values(merged), 'ica-maxi-valsviken');
-
-        // Rensa gammal lista, spara den nya
+        // Rensa gammal lista, spara den nya. Sorteringen efter butik sker när listan hämtas,
+        // så att den kan sorteras om direkt när man byter butik.
         db.prepare('DELETE FROM shopping_list').run();
         const insertItem = db.prepare(
             'INSERT INTO shopping_list (name, amount, unit, category, checked) VALUES (?, ?, ?, ?, 0)'
         );
-        for (const item of list) {
+        for (const item of Object.values(merged)) {
             insertItem.run(item.name, item.amount, item.unit, item.category);
         }
 
@@ -86,8 +85,10 @@ app.post('/api/shopping-list', (req, res) => {
     }
 });
 
+// Listan sorteras efter den valda butikens gångordning
 function getShoppingListFromDb() {
-    return db.prepare('SELECT * FROM shopping_list ORDER BY id').all();
+    const items = db.prepare('SELECT * FROM shopping_list ORDER BY id').all();
+    return sortByStoreLayout(items, getActiveStoreLayout());
 }
 
 // Hämta sparad lista
@@ -117,6 +118,121 @@ app.delete('/api/shopping-list', (req, res) => {
     try {
         db.prepare('DELETE FROM shopping_list').run();
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------- Butiker ----------
+
+function getActiveStoreId() {
+    const setting = db.prepare("SELECT value FROM settings WHERE key = 'active_store'").get();
+    const id = Number(setting?.value);
+    if (id && db.prepare('SELECT 1 FROM stores WHERE id = ?').get(id)) return id;
+    // ingen vald (eller borttagen) butik -> ta den första
+    return db.prepare('SELECT id FROM stores ORDER BY id').get()?.id ?? null;
+}
+
+function setActiveStoreId(id) {
+    db.prepare(`
+        INSERT INTO settings (key, value) VALUES ('active_store', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(String(id));
+}
+
+function getActiveStoreLayout() {
+    const row = db.prepare('SELECT categories FROM stores WHERE id = ?').get(getActiveStoreId());
+    return row ? JSON.parse(row.categories) : [];
+}
+
+function toStore(row) {
+    const inShoppingList = db.prepare('SELECT DISTINCT category FROM shopping_list').all().map(r => r.category);
+    return {
+        id: row.id,
+        name: row.name,
+        categories: withAllCategories(JSON.parse(row.categories), inShoppingList)
+    };
+}
+
+function getStore(id) {
+    const row = db.prepare('SELECT * FROM stores WHERE id = ?').get(id);
+    return row ? toStore(row) : null;
+}
+
+// Tar bort tomma värden och dubbletter, så att databasen alltid har en giltig ordning
+function cleanCategories(categories) {
+    if (!Array.isArray(categories)) return null;
+    return [...new Set(categories.map(c => String(c).trim()).filter(Boolean))];
+}
+
+function storeError(res, err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        return res.status(409).json({ error: 'Det finns redan en butik med det namnet' });
+    }
+    res.status(500).json({ error: err.message });
+}
+
+app.get('/api/stores', (req, res) => {
+    try {
+        const stores = db.prepare('SELECT * FROM stores ORDER BY name').all().map(toStore);
+        res.json({ activeStoreId: getActiveStoreId(), stores });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Ny butik – utgår från den valda butikens ordning, eftersom de flesta butiker liknar varandra
+app.post('/api/stores', (req, res) => {
+    try {
+        const name = String(req.body.name || '').trim();
+        if (!name) return res.status(400).json({ error: 'Butiken behöver ett namn' });
+
+        const categories = cleanCategories(req.body.categories) || getActiveStoreLayout();
+        const result = db.prepare('INSERT INTO stores (name, categories) VALUES (?, ?)')
+            .run(name, JSON.stringify(categories));
+        res.json(getStore(result.lastInsertRowid));
+    } catch (err) {
+        storeError(res, err);
+    }
+});
+
+// Byt namn och/eller ändra ordningen
+app.put('/api/stores/:id', (req, res) => {
+    try {
+        const current = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.params.id);
+        if (!current) return res.status(404).json({ error: 'Butiken finns inte' });
+
+        const name = String(req.body.name ?? current.name).trim() || current.name;
+        const categories = cleanCategories(req.body.categories) || JSON.parse(current.categories);
+        db.prepare('UPDATE stores SET name = ?, categories = ? WHERE id = ?')
+            .run(name, JSON.stringify(categories), current.id);
+        res.json(getStore(current.id));
+    } catch (err) {
+        storeError(res, err);
+    }
+});
+
+app.delete('/api/stores/:id', (req, res) => {
+    try {
+        const count = db.prepare('SELECT COUNT(*) AS count FROM stores').get().count;
+        if (count <= 1) return res.status(400).json({ error: 'Det måste finnas minst en butik' });
+
+        const result = db.prepare('DELETE FROM stores WHERE id = ?').run(req.params.id);
+        if (result.changes === 0) return res.status(404).json({ error: 'Butiken finns inte' });
+        res.json({ success: true, activeStoreId: getActiveStoreId() });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Välj butik – svarar med inköpslistan sorterad efter den nya butiken
+app.post('/api/stores/:id/activate', (req, res) => {
+    try {
+        if (!db.prepare('SELECT 1 FROM stores WHERE id = ?').get(req.params.id)) {
+            return res.status(404).json({ error: 'Butiken finns inte' });
+        }
+        setActiveStoreId(req.params.id);
+        res.json(getShoppingListFromDb());
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
