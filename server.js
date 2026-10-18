@@ -90,7 +90,7 @@ function getShoppingListFromDb() {
     return db.prepare('SELECT * FROM shopping_list ORDER BY id').all();
 }
 
-// Hämta sparad lista (vid sidladdning)
+// Hämta sparad lista
 app.get('/api/shopping-list', (req, res) => {
     try {
         res.json(getShoppingListFromDb());
@@ -112,7 +112,7 @@ app.patch('/api/shopping-list/:id/check', (req, res) => {
     }
 });
 
-// Rensa hela listan (inför nästa vecka)
+// Rensa hela listan
 app.delete('/api/shopping-list', (req, res) => {
     try {
         db.prepare('DELETE FROM shopping_list').run();
@@ -179,7 +179,7 @@ const deleteRecipe = db.transaction(id => {
     db.prepare('DELETE FROM recipes WHERE id = ?').run(id);
 });
 
-// Spara ett nytt recept (körs automatiskt varje gång du scrapar/lägger till ett)
+// Spara ett nytt recept
 app.post('/api/recipes', async (req, res) => {
     try {
         const { name, image, ingredients = [], instructions = [] } = req.body;
@@ -216,7 +216,7 @@ app.post('/api/recipes', async (req, res) => {
     }
 });
 
-// Hämta alla sparade recept (körs vid sidladdning)
+// Hämta alla sparade recept
 app.get('/api/recipes', (req, res) => {
     try {
         const rows = db.prepare('SELECT * FROM recipes ORDER BY id').all();
